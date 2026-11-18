@@ -1,0 +1,13 @@
+{
+  "name": "itonami-market-android",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test",
+    "tauri": "tauri",
+    "android": "npm run build && tauri android build --apk --debug --target aarch64"
+  },
+  "devDependencies": { "@tauri-apps/cli": "3.0.0-alpha.6" }
+}
