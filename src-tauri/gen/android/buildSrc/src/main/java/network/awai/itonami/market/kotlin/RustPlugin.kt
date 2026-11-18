@@ -58,6 +58,10 @@ open class RustPlugin : Plugin<Project> {
                 }
 
                 tasks["mergeUniversal${profileCapitalized}JniLibFolders"].dependsOn(buildTask)
+                // Tauri's Rust build generates Kotlin bridge sources during a clean build.
+                tasks.named("compileUniversal${profileCapitalized}Kotlin").configure {
+                    dependsOn(buildTask)
+                }
 
                 for (targetPair in targetsList.withIndex()) {
                     val targetName = targetPair.value
@@ -76,6 +80,9 @@ open class RustPlugin : Plugin<Project> {
                     }
 
                     buildTask.dependsOn(targetBuildTask)
+                    tasks.named("compile$targetArchCapitalized${profileCapitalized}Kotlin").configure {
+                        dependsOn(targetBuildTask)
+                    }
                     tasks["merge$targetArchCapitalized${profileCapitalized}JniLibFolders"].dependsOn(
                         targetBuildTask
                     )
