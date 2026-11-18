@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; @CONNECT_SRC@">
+<title>営 市場情報</title>
+<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="./kotoba-client-consent.css">
+<script type="module" src="./app.mjs"></script>
+</head>
+<body>
+<header><div class="shell"><strong>営</strong> 市場情報</div></header>
+<main class="shell">
+  <section class="hero"><div><h1>WETH / USDC</h1><p>Ethereum・Uniswap v3 の確定ブロックから集計</p></div>
+    <button type="button" id="load" disabled>最新スナップショットを取得</button></section>
+  <p class="status" id="status" role="status">アプリを読み込んでいます。</p>
+  <section id="snapshot" hidden>
+    <div class="panel">
+      <h2>市場指標</h2>
+      <p id="time"></p>
+      <dl class="metrics">
+        <div><dt>プール価格</dt><dd id="price"></dd></div>
+        <div><dt>WETH9 報告供給量</dt><dd id="supply"></dd></div>
+        <div><dt>時価総額の参考値</dt><dd id="cap"></dd></div>
+        <div><dt>プール出来高・過去24h</dt><dd id="volume"></dd></div>
+      </dl>
+      <p>供給量は WETH9 の <code>totalSupply()</code>。時価総額の参考値は供給量 × プール価格。</p>
+    </div>
+    <div class="panel">
+      <h2 id="history">価格履歴</h2>
+      <p>約1日間隔の30観測点・USDC 建て</p>
+      <canvas id="chart" aria-hidden="true"></canvas>
+      <details><summary>観測点の表を開く</summary>
+        <div class="table-scroll" role="region" aria-labelledby="history" tabindex="0">
+          <table><thead><tr><th scope="col">観測時刻</th><th scope="col">価格</th><th scope="col">ブロック</th></tr></thead>
+          <tbody id="rows"></tbody></table>
+        </div>
+      </details>
+    </div>
+    <div class="panel sources">
+      <h2>出典と検証</h2>
+      <p id="cid"></p>
+      <p><a id="block" rel="noreferrer">観測ブロック</a> · <a id="window" rel="noreferrer">出来高の起点</a> ·
+        <a href="https://etherscan.io/address/0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640" rel="noreferrer">Uniswap プール</a> ·
+        <a href="https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2" rel="noreferrer">WETH9</a> ·
+        <a href="https://creativecommons.org/publicdomain/zero/1.0/" rel="noreferrer">集計データ CC0</a></p>
+    </div>
+  </section>
+</main>
+</body>
+</html>
