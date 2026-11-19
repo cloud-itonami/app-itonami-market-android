@@ -30,7 +30,7 @@ files['descriptor.json'] = JSON.stringify(descriptor, null, 2) + '\n';
 files['release.json'] = JSON.stringify({
   schema: 'awai.app.artifact.v1',
   id: 'itonami-market-android',
-  version: '0.2.0',
+  version: '0.2.1',
   canonicalRuntime: { revision, source: upstream, files: pins },
   files: Object.fromEntries(Object.entries(files).map(([file, bytes]) => [file, sha256(bytes)])),
 }, null, 2) + '\n';

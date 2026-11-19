@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { POOL, WETH, SWAP_TOPIC, SNAPSHOT, assert, boundedResponse, readSnapshot } from '../src/protocol.mjs';
-import { FACTORY, USDC, MARKETS, MARKETS_SNAPSHOT, aggregatePools, readMarketsSnapshot } from '../src/markets.mjs';
+import { FACTORY, USDC, MARKETS, MARKETS_SNAPSHOT, CIRCULATION_METHOD, aggregatePools, readMarketsSnapshot, unavailableCirculation } from '../src/markets.mjs';
 
 const fn = { slot0: '0x3850c7bd', supply: '0x18160ddd', token0: '0x0dfe1681', token1: '0xd21220a7', decimals: '0x313ce567' };
 const q192 = 1n << 192n;
@@ -156,11 +156,15 @@ export async function observeMarkets(rpc, now = Date.now()) {
       volumeMicros: volumes.get(pool.address).toString() }));
     const history = samples.map(({ anchor: point, slots }) => ({ ...point, priceMicros: priceMicros(slots[index], asset) }));
     history.push({ ...anchor, priceMicros: prices.get(historyPool) });
-    return { token: asset.token, supplyRaw: uint(supply[index]).toString(), ...aggregatePools(rows), pools: rows, historyPool, history };
+    return {
+      token: asset.token, supplyRaw: uint(supply[index]).toString(), circulation: unavailableCirculation(asset),
+      ...aggregatePools(rows), pools: rows, historyPool, history,
+    };
   });
   const [readback] = await rpc([blockAt(height)]);
   assert(block(readback).hash === anchor.hash, 'Finalized Ethereum block changed during observation');
-  return readMarketsSnapshot({ schema: MARKETS_SNAPSHOT, chain: 1, quote: USDC, license: 'CC0-1.0', anchor, windowStart, markets });
+  return readMarketsSnapshot({ schema: MARKETS_SNAPSHOT, chain: 1, quote: USDC, license: 'CC0-1.0',
+    circulationMethod: CIRCULATION_METHOD, anchor, windowStart, markets });
 }
 
 export function legacySnapshot(data) {
