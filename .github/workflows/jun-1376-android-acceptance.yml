@@ -1,0 +1,44 @@
+name: JUN-1376 Android acceptance build
+on:
+  push:
+    branches: [codex/jun-1376-android-acceptance]
+permissions:
+  contents: read
+jobs:
+  debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - name: Install target toolchains
+        run: |
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          rustup update stable
+          rustup target add aarch64-linux-android --toolchain stable
+          sdkmanager "platforms;android-37" "ndk;27.0.12077973"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+          echo "RUSTUP_TOOLCHAIN=stable" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm run android
+      - name: Prepare package
+        run: |
+          mkdir -p acceptance
+          apk=$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk' | head -1)
+          test -n "$apk"
+          cp "$apk" acceptance/itonami-market-arm64-debug.apk
+          cd acceptance
+          sha256sum itonami-market-arm64-debug.apk > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: jun-1376-market-android
+          path: acceptance
+          retention-days: 7
