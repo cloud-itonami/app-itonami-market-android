@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { INDEX, SNAPSHOT, POOL, WETH, rawCID, verifyBlock, readSnapshot } from '../src/protocol.mjs';
 import { MARKETS, USDC, MARKETS_INDEX, MARKETS_SNAPSHOT, aggregatePools, readMarketsSnapshot, verifyMarketsBlock } from '../src/markets.mjs';
 import { priceMicros, swapUSDC, legacySnapshot } from '../scripts/ethereum.mjs';
@@ -63,4 +64,10 @@ test('v2 validates its fixed markets and common window and keeps the v1 pool val
   const corrupt = structuredClone(data);
   corrupt.markets[1].volumeMicros='41';
   assert.throws(() => readMarketsSnapshot(corrupt), /集計/);
+});
+
+test('selected market has a source link for both the history pool and supply contract', async () => {
+  const html = await readFile(new URL('../src/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<a id="history-pool"[^>]*>/);
+  assert.match(html, /<a id="supply-source"[^>]*>/);
 });
