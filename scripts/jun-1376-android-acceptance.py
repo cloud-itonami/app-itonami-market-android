@@ -62,13 +62,13 @@ approve('read-market-block', cid)
 locate('最新の公開スナップショットを表示')
 supply_xml, supply_nodes, _ = locate('流通供給量と時価総額', scroll=True)
 supply_text = [node.get('text', '') for node in supply_nodes]
-while supply_text.count('欠損') < 4:
+for _ in range(4):
+    if supply_text.count('欠損') == 4:
+        break
     adb('shell', 'input', 'swipe', '520', '940', '520', '760', '500')
     supply_xml, supply_nodes = dump()
     supply_text = [node.get('text', '') for node in supply_nodes]
-    if supply_text.count('欠損') == 4:
-        break
-    assert '流通供給量と時価総額' in supply_text, supply_text
+assert supply_text.count('欠損') == 4, supply_text
 assert 'WETH' in supply_text and 'WBTC' in supply_text, supply_text
 (directory/'android-supply.xml').write_bytes(supply_xml)
 (directory/'android-supply.png').write_bytes(adb('exec-out', 'screencap', '-p'))

@@ -35,7 +35,7 @@ jobs:
           manager=$(find "${ANDROID_HOME:?}/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort | tail -1)
           test -x "$manager"
           echo "$(dirname "$manager")" >> "$GITHUB_PATH"
-          "$manager" "platforms;android-37" "ndk;27.0.12077973"
+          "$manager" "platforms;android-37.0" "ndk;27.0.12077973"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
           echo "RUSTUP_TOOLCHAIN=stable" >> "$GITHUB_ENV"
       - run: npm ci
