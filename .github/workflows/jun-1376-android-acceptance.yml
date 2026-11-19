@@ -31,9 +31,19 @@ jobs:
           export PATH="$JAVA_HOME/bin:$(dirname "$manager"):$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
           sdkmanager platform-tools emulator "$EMULATOR_IMAGE"
           command -v adb
-          echo no | avdmanager create avd --force --name market-ci --package "$EMULATOR_IMAGE"
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/market-avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | avdmanager create avd --force --name market-ci --path "$ANDROID_AVD_HOME/market-ci.avd" --package "$EMULATOR_IMAGE"
+          if [ ! -f "$ANDROID_AVD_HOME/market-ci.ini" ]; then
+            config=$(find "$HOME/.android" "$HOME/.config" -type f -name market-ci.ini -print -quit 2>/dev/null || true)
+            test -f "$config"
+            cp "$config" "$ANDROID_AVD_HOME/market-ci.ini"
+          fi
+          emulator -list-avds | grep -Fx market-ci
           emulator -avd market-ci -port 5560 -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect > acceptance/emulator.log 2>&1 &
-          if ! timeout 180 adb -s emulator-5560 wait-for-device; then
+          emulator_pid=$!
+          sleep 3
+          if ! kill -0 "$emulator_pid" || ! timeout 120 adb -s emulator-5560 wait-for-device; then
             tail -60 acceptance/emulator.log
             exit 1
           fi
