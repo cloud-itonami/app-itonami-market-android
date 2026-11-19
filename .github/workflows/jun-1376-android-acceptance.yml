@@ -8,9 +8,15 @@ jobs:
   debug-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64, x86_64]
     env:
       CARGO_INCREMENTAL: '0'
       CARGO_PROFILE_DEV_DEBUG: '0'
+      EMULATOR_IMAGE: system-images;android-35;google_apis;x86_64
+      EXPECTED_MARKET_CID: bafkreidgdqlqt4kg2whsjchsbn7hkolcn3zrndn4wbzgk5uytnabsvz3hq
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -20,25 +26,47 @@ jobs:
           node-version: '22'
       - name: Install target toolchains
         run: |
-          java -version
-          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          export JAVA_HOME="${JAVA_HOME_21_X64:?}"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME/bin" >> "$GITHUB_PATH"
           rustup update stable
-          rustup target add aarch64-linux-android --toolchain stable
-          sdkmanager "platforms;android-37" "ndk;27.0.12077973"
+          rustup target add "${{ matrix.target }}-linux-android" --toolchain stable
+          manager=$(find "${ANDROID_HOME:?}/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort | tail -1)
+          test -x "$manager"
+          echo "$(dirname "$manager")" >> "$GITHUB_PATH"
+          "$manager" "platforms;android-37" "ndk;27.0.12077973"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
           echo "RUSTUP_TOOLCHAIN=stable" >> "$GITHUB_ENV"
       - run: npm ci
-      - run: npm run android
+      - run: npm run build && npx --no-install tauri android build --apk --debug --target ${{ matrix.target }}
       - name: Prepare package
         run: |
           mkdir -p acceptance
           apk=$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk' | head -1)
           test -n "$apk"
-          cp "$apk" acceptance/itonami-market-arm64-debug.apk
+          cp "$apk" acceptance/itonami-market-${{ matrix.target }}-debug.apk
           cd acceptance
-          sha256sum itonami-market-arm64-debug.apk > SHA256SUMS
+          sha256sum itonami-market-${{ matrix.target }}-debug.apk > SHA256SUMS
+      - name: Verify Android app against live Yataverse CID
+        if: matrix.target == 'x86_64'
+        run: |
+          set -o pipefail
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          sdkmanager emulator "$EMULATOR_IMAGE"
+          echo no | avdmanager create avd --force --name market-ci --package "$EMULATOR_IMAGE"
+          "$ANDROID_HOME/emulator/emulator" -avd market-ci -port 5560 -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect > acceptance/emulator.log 2>&1 &
+          timeout 180 adb -s emulator-5560 wait-for-device
+          for check in $(seq 1 90); do
+            if [ "$(adb -s emulator-5560 shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then break; fi
+            sleep 2
+          done
+          test "$(adb -s emulator-5560 shell getprop sys.boot_completed | tr -d '\r')" = 1
+          python3 scripts/jun-1376-android-acceptance.py | tee acceptance/android-live.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
         with:
-          name: jun-1376-market-android
+          name: jun-1376-market-android-${{ matrix.target }}
           path: acceptance
           retention-days: 7
