@@ -20,7 +20,7 @@ for (const [file, expected] of Object.entries(pins)) {
 const { clientRuntimeConnectSrc } = await import(`data:text/javascript;base64,${Buffer.from(files['kotoba-client-runtime.js']).toString('base64')}`);
 const { descriptor, capabilities } = await import('../src/descriptor.mjs');
 const connectSrc = clientRuntimeConnectSrc(descriptor, capabilities);
-for (const file of ['protocol.mjs', 'app.mjs', 'descriptor.mjs', 'style.css']) {
+for (const file of ['protocol.mjs', 'markets.mjs', 'app.mjs', 'descriptor.mjs', 'style.css']) {
   files[file] = await readFile(new URL('../src/' + file, import.meta.url));
 }
 const html = await readFile(new URL('../src/index.html', import.meta.url), 'utf8');
@@ -30,7 +30,7 @@ files['descriptor.json'] = JSON.stringify(descriptor, null, 2) + '\n';
 files['release.json'] = JSON.stringify({
   schema: 'awai.app.artifact.v1',
   id: 'itonami-market-android',
-  version: '0.1.0',
+  version: '0.2.0',
   canonicalRuntime: { revision, source: upstream, files: pins },
   files: Object.fromEntries(Object.entries(files).map(([file, bytes]) => [file, sha256(bytes)])),
 }, null, 2) + '\n';
