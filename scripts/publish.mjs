@@ -77,7 +77,7 @@ async function publishFeed(feed, data, current) {
     await feed.verify(readback, index);
     assert(readback.equals(bytes), 'Yataverse readback differs');
     const payload = JSON.stringify({
-      branch: 'feed', message: 'JUN-1374 Publish ' + feed.file + ' at block ' + data.anchor.block,
+      branch: 'feed', message: 'JUN-1376 Publish ' + feed.file + ' at block ' + data.anchor.block,
       content: Buffer.from(JSON.stringify(index) + '\n').toString('base64'),
       ...(current ? { sha: current.sha } : {}),
     });

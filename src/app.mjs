@@ -80,16 +80,29 @@ function makeRow(label, price, volume, href) {
   return row;
 }
 
+function renderSupply(data) {
+  ui['supply-rows'].replaceChildren(...data.markets.map((asset, i) => {
+    const spec = MARKETS[i];
+    const row = document.createElement('tr');
+    const symbol = document.createElement('th');
+    symbol.scope = 'row';
+    symbol.textContent = spec.symbol;
+    const supply = document.createElement('td');
+    supply.textContent = '欠損';
+    const cap = document.createElement('td');
+    cap.textContent = '欠損';
+    const reported = document.createElement('td');
+    reported.textContent = number.format(scaled(asset.supplyRaw, 10 ** spec.decimals)) + ' ' + spec.symbol;
+    row.append(symbol, supply, cap, reported);
+    return row;
+  }));
+  ui['supply-data-status'].hidden = Object.hasOwn(data, 'circulationMethod');
+}
+
 function renderHistory() {
   if (!current) return;
   const data = selectedMarket();
-  const spec = MARKETS[Number(ui.asset.value)];
-  const units = 10n ** BigInt(spec.decimals);
-  const capMicros = BigInt(data.supplyRaw) * BigInt(data.priceMicros) / units;
-  ui.supply.textContent = number.format(scaled(data.supplyRaw, Number(units))) + ' ' + spec.symbol;
-  ui.cap.textContent = usdc(capMicros);
   ui['history-pool'].href = addressURL(data.historyPool);
-  ui['supply-source'].href = addressURL(data.token);
   ui.rows.replaceChildren(...data.history.slice().reverse().map((point) => {
     const row = document.createElement('tr');
     const date = document.createElement('th');
@@ -121,7 +134,25 @@ function render(data, index) {
     makeRow(MARKETS[i].symbol + ' ' + (pool.fee / 10000).toFixed(2) + '%',
       pool.priceMicros, pool.volumeMicros, addressURL(pool.address)))));
   ui.snapshot.hidden = false;
+  renderSupply(data);
   renderHistory();
+}
+for (const spec of MARKETS) {
+  const reason = document.createElement('p');
+  const source = document.createElement('a');
+  source.href = spec.circulation.source;
+  source.rel = 'noreferrer';
+  source.textContent = spec.circulation.label;
+  reason.append(spec.symbol + ' — ' + spec.circulation.detail + ' ', source);
+  const contractURL = addressURL(spec.token) + '#code';
+  if (contractURL !== spec.circulation.source) {
+    const contract = document.createElement('a');
+    contract.href = contractURL;
+    contract.rel = 'noreferrer';
+    contract.textContent = spec.symbol + ' トークン契約';
+    reason.append(' · ', contract);
+  }
+  ui['supply-reasons'].append(reason);
 }
 ui.asset.addEventListener('change', renderHistory);
 

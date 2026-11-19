@@ -35,16 +35,24 @@
         </div>
       </details>
     </div>
+    <div class="panel sources">
+      <h2 id="supply-title">流通供給量と時価総額</h2>
+      <div class="table-scroll" role="region" aria-labelledby="supply-title" tabindex="0">
+        <table class="comparison">
+          <thead><tr><th scope="col">銘柄</th><th scope="col">流通供給量</th><th scope="col">時価総額</th><th scope="col">契約報告量（参考）</th></tr></thead>
+          <tbody id="supply-rows"></tbody>
+        </table>
+      </div>
+      <p class="method">対象は Ethereum メインネット。公開市場に流通する数量を、集計価格と同じ確定ブロックで検証します。時価総額は検証できた流通供給量 × 集計価格（USDC）です。流通供給量を確認できないときは両方を欠損と表示します。</p>
+      <p id="supply-data-status" hidden>このスナップショットには流通供給量の検証結果が収録されていません。</p>
+      <p>契約報告量は観測ブロックで各契約の <code>totalSupply()</code> を読み取った値です。</p>
+      <div id="supply-reasons" class="method"></div>
+    </div>
     <div class="panel">
       <div class="history-head">
-        <h2 id="history">価格履歴と供給量</h2>
+        <h2 id="history">価格履歴</h2>
         <label for="asset">銘柄 <select id="asset"><option value="0">WETH</option><option value="1">WBTC</option></select></label>
       </div>
-      <dl class="metrics">
-        <div><dt>報告供給量</dt><dd id="supply"></dd></div>
-        <div><dt>時価総額の参考値</dt><dd id="cap"></dd></div>
-      </dl>
-      <p>供給量は各トークンの <code>totalSupply()</code>。時価総額の参考値は報告供給量 × 集計価格。</p>
       <p>手数料0.05%の<a id="history-pool" rel="noreferrer">参照プール</a>の価格・約1日間隔の30観測点</p>
       <canvas id="chart" aria-hidden="true"></canvas>
       <details><summary>観測点の表を開く</summary>
@@ -58,7 +66,6 @@
       <h2>出典と検証</h2>
       <p id="cid"></p>
       <p><a id="block" rel="noreferrer">観測ブロック</a> · <a id="window" rel="noreferrer">出来高の起点</a> ·
-        <a id="supply-source" rel="noreferrer">選択した銘柄のトークン契約</a> ·
         <a href="https://creativecommons.org/publicdomain/zero/1.0/" rel="noreferrer">集計データ CC0</a></p>
     </div>
   </section>

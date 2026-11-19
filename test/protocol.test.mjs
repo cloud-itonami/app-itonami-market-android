@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { INDEX, SNAPSHOT, POOL, WETH, rawCID, verifyBlock, readSnapshot } from '../src/protocol.mjs';
-import { MARKETS, USDC, MARKETS_INDEX, MARKETS_SNAPSHOT, aggregatePools, readMarketsSnapshot, verifyMarketsBlock } from '../src/markets.mjs';
+import { MARKETS, USDC, MARKETS_INDEX, MARKETS_SNAPSHOT, CIRCULATION_METHOD, aggregatePools, readMarketsSnapshot, unavailableCirculation, verifyMarketsBlock } from '../src/markets.mjs';
 import { priceMicros, swapUSDC, legacySnapshot } from '../scripts/ethereum.mjs';
 
 const word = (x) => BigInt.asUintN(256, x).toString(16).padStart(64, '0');
@@ -64,10 +64,36 @@ test('v2 validates its fixed markets and common window and keeps the v1 pool val
   const corrupt = structuredClone(data);
   corrupt.markets[1].volumeMicros='41';
   assert.throws(() => readMarketsSnapshot(corrupt), /集計/);
+
+  // Older v2 remains readable. Once the method is declared, both rows must
+  // explicitly encode missing values and their asset-specific evidence gap.
+  const withCirculation = {
+    ...data, circulationMethod: CIRCULATION_METHOD,
+    markets: data.markets.map((row, i) => ({ ...row, circulation: unavailableCirculation(MARKETS[i]) })),
+  };
+  const updated = new TextEncoder().encode(JSON.stringify(withCirculation));
+  const verified = await verifyMarketsBlock(updated, { ...index, cid: await rawCID(updated) });
+  assert.deepEqual(verified.markets.map((row) => row.circulation), [
+    { supplyRaw: null, capMicros: null, reason: 'weth-backing-only' },
+    { supplyRaw: null, capMicros: null, reason: 'wbtc-no-anchored-public-float' },
+  ]);
+  assert.throws(() => readMarketsSnapshot({ ...withCirculation, circulationMethod: 'unknown' }), /算定方法/);
+  const withoutMethod = { ...withCirculation };
+  delete withoutMethod.circulationMethod;
+  assert.throws(() => readMarketsSnapshot(withoutMethod), /算定方法/);
+  for (const bad of [
+    undefined, { ...verified.markets[0].circulation, supplyRaw: verified.markets[0].supplyRaw },
+    { ...verified.markets[0].circulation, capMicros: '0' }, verified.markets[1].circulation,
+  ]) {
+    const wrong = structuredClone(verified);
+    wrong.markets[0].circulation = bad;
+    assert.throws(() => readMarketsSnapshot(wrong), /根拠/);
+  }
 });
 
-test('selected market has a source link for both the history pool and supply contract', async () => {
+test('history and supply comparison expose their source containers', async () => {
   const html = await readFile(new URL('../src/index.html', import.meta.url), 'utf8');
   assert.match(html, /<a id="history-pool"[^>]*>/);
-  assert.match(html, /<a id="supply-source"[^>]*>/);
+  assert.match(html, /<tbody id="supply-rows">/);
+  assert.match(html, /<div id="supply-reasons"[^>]*>/);
 });
