@@ -12,40 +12,47 @@ export function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-const quantity = (value) => typeof value === 'string' && /^(0|[1-9][0-9]{0,35})$/.test(value);
+export const quantity = (value) => typeof value === 'string' && /^(0|[1-9][0-9]{0,35})$/.test(value);
 const hash = (value) => typeof value === 'string' && /^0x[0-9a-f]{64}$/.test(value);
 const unix = (value) => Number.isSafeInteger(value) && value > 1_600_000_000 && value < 4_102_444_800;
-function anchor(point) {
+function isAnchor(point) {
   return point && Number.isSafeInteger(point.block) && point.block > 0 && hash(point.hash) && unix(point.time);
 }
 
-export function readIndex(index) {
-  assert(index?.schema === INDEX && typeof index.cid === 'string' && RAW_CID.test(index.cid)
-    && anchor(index.anchor), '最新 CID の形式が正しくありません。');
+export function readIndex(index, schema = INDEX) {
+  assert(index?.schema === schema && typeof index.cid === 'string' && RAW_CID.test(index.cid)
+    && isAnchor(index.anchor), '最新 CID の形式が正しくありません。');
   assert(index.anchor.time <= Math.floor(Date.now() / 1000) + 120, '最新 CID の観測時刻が未来です。');
   return index;
 }
 
+export function snapshotWindow(data) {
+  return isAnchor(data.anchor) && isAnchor(data.windowStart) && data.windowStart.block < data.anchor.block
+    && data.windowStart.time >= data.anchor.time - 86400 && data.windowStart.time <= data.anchor.time - 86300;
+}
+
+export function validateHistory(history, anchor, price) {
+  assert(Array.isArray(history) && history.length === 30, '価格履歴は30観測点が必要です。');
+  let previous = { block: 0, time: 0 };
+  for (const point of history) {
+    assert(isAnchor(point) && quantity(point.priceMicros) && BigInt(point.priceMicros) > 0n
+      && point.block > previous.block && point.time > previous.time && point.block <= anchor.block
+      && point.time <= anchor.time, '履歴の順序または値が正しくありません。');
+    previous = point;
+  }
+  assert(previous.block === anchor.block && previous.time === anchor.time
+    && previous.hash === anchor.hash && previous.priceMicros === price, '価格履歴の末尾が観測ブロックと一致しません。');
+}
+
 export function readSnapshot(data) {
   assert(data?.schema === SNAPSHOT && data.chain === 1 && data.pool === POOL
-    && data.token === WETH && data.license === 'CC0-1.0' && anchor(data.anchor)
-    && anchor(data.windowStart) && data.windowStart.block < data.anchor.block
-    && data.windowStart.time >= data.anchor.time - 86400 && data.windowStart.time <= data.anchor.time - 86300
+    && data.token === WETH && data.license === 'CC0-1.0' && snapshotWindow(data)
     && [data.priceMicros, data.supplyWei, data.capMicros, data.volumeMicros].every(quantity)
     && BigInt(data.priceMicros) > 0n && BigInt(data.supplyWei) > 0n,
   '市場スナップショットの形式が正しくありません。');
   assert(BigInt(data.capMicros) === BigInt(data.supplyWei) * BigInt(data.priceMicros) / 10n ** 18n,
     '時価総額の計算が一致しません。');
-  assert(Array.isArray(data.history) && data.history.length === 30, '価格履歴は30観測点が必要です。');
-  let previous = { block: 0, time: 0 };
-  for (const point of data.history) {
-    assert(anchor(point) && quantity(point.priceMicros) && BigInt(point.priceMicros) > 0n
-      && point.block > previous.block && point.time > previous.time && point.block <= data.anchor.block
-      && point.time <= data.anchor.time, '履歴の順序または値が正しくありません。');
-    previous = point;
-  }
-  assert(previous.block === data.anchor.block && previous.time === data.anchor.time
-    && previous.hash === data.anchor.hash && previous.priceMicros === data.priceMicros, '価格履歴の末尾が観測ブロックと一致しません。');
+  validateHistory(data.history, data.anchor, data.priceMicros);
   return data;
 }
 
@@ -72,10 +79,10 @@ export function parseJSON(bytes) {
   return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
 }
 
-export async function verifyBlock(bytes, candidate) {
-  const index = readIndex(candidate);
+export async function verifyBlock(bytes, candidate, indexSchema = INDEX, snapshotReader = readSnapshot) {
+  const index = readIndex(candidate, indexSchema);
   assert(bytes.byteLength <= MAX_BYTES && await rawCID(bytes) === index.cid, '受信データが指定 CID と一致しません。');
-  const data = readSnapshot(parseJSON(bytes));
+  const data = snapshotReader(parseJSON(bytes));
   assert(['block', 'hash', 'time'].every((field) => data.anchor[field] === index.anchor[field]),
     '最新 CID の観測情報とスナップショットが一致しません。');
   return data;

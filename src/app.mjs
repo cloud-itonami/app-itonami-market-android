@@ -1,6 +1,7 @@
 import { createClientConsentHost, createClientOperationBroker } from './kotoba-client-runtime.js';
 import { capabilities, descriptor, latest, snapshot } from './descriptor.mjs';
-import { GATEWAY, POINTER, readIndex, parseJSON, verifyBlock, boundedResponse, assert } from './protocol.mjs';
+import { GATEWAY, parseJSON, boundedResponse, assert } from './protocol.mjs';
+import { MARKETS, MARKETS_POINTER, readMarketsIndex, verifyMarketsBlock } from './markets.mjs';
 
 const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map((node) => [node.id, node]));
 const broker = createClientOperationBroker({
@@ -16,6 +17,8 @@ const t = (sec) => utc.format(sec * 1000) + ' UTC';
 const scaled = (value, scale) => Number(value) / scale;
 const usdc = (value) => number.format(scaled(value, 1e6)) + ' USDC';
 const blockURL = (height) => 'https://etherscan.io/block/' + height;
+const addressURL = (address) => 'https://etherscan.io/address/' + address;
+const selectedMarket = () => current.markets[Number(ui.asset.value)];
 let current;
 
 async function get(operation, input, maxBytes) {
@@ -24,7 +27,7 @@ async function get(operation, input, maxBytes) {
 }
 function draw() {
   if (!current) return;
-  const points = current.history;
+  const points = selectedMarket().history;
   const { width, height } = ui.chart.getBoundingClientRect();
   if (width < 100) return;
   const ratio = Math.min(devicePixelRatio || 1, 3);
@@ -56,16 +59,37 @@ function draw() {
   });
   ctx.stroke();
 }
-function render(data, index) {
-  current = data;
-  ui.time.textContent = '観測 ' + t(data.anchor.time);
-  ui.price.textContent = usdc(data.priceMicros);
-  ui.supply.textContent = number.format(scaled(data.supplyWei, 1e18)) + ' WETH';
-  ui.cap.textContent = usdc(data.capMicros);
-  ui.volume.textContent = usdc(data.volumeMicros);
-  ui.cid.textContent = 'CID 検証済み · ' + index.cid;
-  ui.block.href = blockURL(data.anchor.block);
-  ui.window.href = blockURL(data.windowStart.block);
+function makeRow(label, price, volume, href) {
+  const row = document.createElement('tr');
+  const header = document.createElement('th');
+  header.scope = 'row';
+  if (href) {
+    const link = document.createElement('a');
+    link.href = href;
+    link.rel = 'noreferrer';
+    link.textContent = label;
+    header.append(link);
+  } else {
+    header.textContent = label;
+  }
+  const value = document.createElement('td');
+  value.textContent = usdc(price);
+  const turnover = document.createElement('td');
+  turnover.textContent = usdc(volume);
+  row.append(header, value, turnover);
+  return row;
+}
+
+function renderHistory() {
+  if (!current) return;
+  const data = selectedMarket();
+  const spec = MARKETS[Number(ui.asset.value)];
+  const units = 10n ** BigInt(spec.decimals);
+  const capMicros = BigInt(data.supplyRaw) * BigInt(data.priceMicros) / units;
+  ui.supply.textContent = number.format(scaled(data.supplyRaw, Number(units))) + ' ' + spec.symbol;
+  ui.cap.textContent = usdc(capMicros);
+  ui['history-pool'].href = addressURL(data.historyPool);
+  ui['supply-source'].href = addressURL(data.token);
   ui.rows.replaceChildren(...data.history.slice().reverse().map((point) => {
     const row = document.createElement('tr');
     const date = document.createElement('th');
@@ -82,15 +106,30 @@ function render(data, index) {
     row.append(date, price, source);
     return row;
   }));
-  ui.snapshot.hidden = false;
   draw();
 }
+function render(data, index) {
+  current = data;
+  ui.time.textContent = '観測 ' + t(data.anchor.time);
+  ui.interval.textContent = '24h 集計窓 ' + t(data.anchor.time - 86400) + ' から ' + t(data.anchor.time);
+  ui.cid.textContent = 'CID 検証済み · ' + index.cid;
+  ui.block.href = blockURL(data.anchor.block);
+  ui.window.href = blockURL(data.windowStart.block);
+  ui['market-rows'].replaceChildren(...data.markets.map((asset, i) =>
+    makeRow(MARKETS[i].symbol, asset.priceMicros, asset.volumeMicros)));
+  ui['pool-rows'].replaceChildren(...data.markets.flatMap((asset, i) => asset.pools.map((pool) =>
+    makeRow(MARKETS[i].symbol + ' ' + (pool.fee / 10000).toFixed(2) + '%',
+      pool.priceMicros, pool.volumeMicros, addressURL(pool.address)))));
+  ui.snapshot.hidden = false;
+  renderHistory();
+}
+ui.asset.addEventListener('change', renderHistory);
 
 ui.load.addEventListener('click', async () => {
   if (ui.load.disabled) return;
   ui.load.disabled = true;
   try {
-    const index = readIndex(parseJSON(await get(latest, POINTER, 8192)));
+    const index = readMarketsIndex(parseJSON(await get(latest, MARKETS_POINTER, 8192)));
     if (current) {
       assert(current.anchor.block <= index.anchor.block && current.anchor.time <= index.anchor.time,
         '表示中より古い観測が返されました。');
@@ -98,7 +137,7 @@ ui.load.addEventListener('click', async () => {
         '表示中の確定ブロックと異なるハッシュが返されました。');
     }
     const bytes = await get(snapshot, `${GATEWAY}/ipfs/${index.cid}?format=raw`);
-    const data = await verifyBlock(bytes, index);
+    const data = await verifyMarketsBlock(bytes, index);
     render(data, index);
     ui.status.textContent = Date.now() / 1000 - data.anchor.time > 9 * 3600
       ? 'CID は一致しました。観測から9時間以上経過しています。' : '最新の公開スナップショットを表示しています。';

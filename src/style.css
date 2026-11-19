@@ -27,3 +27,11 @@ thead { position: sticky; inset-block-start: 0; background: #eef6f5; }
 a { color: #075d71; }
 #cid { overflow-wrap: anywhere; font: .85rem/1.6 ui-monospace, monospace; }
 .sources p + p { margin-top: .55rem; }
+.method { margin-block: .7rem; }
+.comparison th:first-child { position: sticky; inset-inline-start: 0; }
+.comparison thead th:first-child { background: #eef6f5; }
+.comparison tbody th { background: #fff; z-index: 1; }
+.comparison td { text-align: end; }
+thead { z-index: 2; }
+.history-head { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: space-between; align-items: baseline; }
+.history-head select { font: inherit; min-height: 2.5rem; padding-inline: .35rem; }

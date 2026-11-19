@@ -1,8 +1,9 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { POOL, WETH, SWAP_TOPIC, SNAPSHOT, assert, boundedResponse, readSnapshot } from '../src/protocol.mjs';
+import { FACTORY, USDC, MARKETS, MARKETS_SNAPSHOT, aggregatePools, readMarketsSnapshot } from '../src/markets.mjs';
 
-const fn = { slot0: '0x3850c7bd', supply: '0x18160ddd', token0: '0x0dfe1681', token1: '0xd21220a7' };
-const usdc = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+const fn = { slot0: '0x3850c7bd', supply: '0x18160ddd', token0: '0x0dfe1681', token1: '0xd21220a7', decimals: '0x313ce567' };
+const q192 = 1n << 192n;
 const tag = (number) => '0x' + number.toString(16);
 const blockAt = (height) => ['eth_getBlockByNumber', [height, false]];
 const callAt = (to, data, height) => ['eth_call', [{ to, data }, height]];
@@ -15,16 +16,19 @@ function block(row) {
   return { block: Number(uint(row.number)), hash: row.hash, time: Number(uint(row.timestamp)) };
 }
 
-// sqrtPriceX96 is sqrt(raw WETH / raw USDC) * 2^96. Invert and
-// account for 18/6 decimals. The result is truncated to micro-USDC.
-export function priceMicros(slot0) {
+// The sqrt price squares to raw token1/token0. Exactly one token is USDC.
+// Its 6 decimals coincide with the required micro-USDC output.
+export function priceMicros(slot0, asset) {
   const ratio = uint(slot0.slice(0, 66));
   assert(ratio > 0n, 'Uninitialized Uniswap price');
-  return ((1n << 192n) * 10n ** 18n / (ratio * ratio)).toString();
+  const squared = ratio * ratio;
+  const units = 10n ** BigInt(asset.decimals);
+  return (asset.quoteSide === 0 ? q192 * units / squared : squared * units / q192).toString();
 }
-export function swapUSDC(data) {
+export function swapUSDC(data, quoteSide) {
   assert(typeof data === 'string' && /^0x[0-9a-f]{320}$/i.test(data), 'Malformed Swap event');
-  const amount = BigInt.asIntN(256, uint(data.slice(0, 66)));
+  const offset = 2 + quoteSide * 64;
+  const amount = BigInt.asIntN(256, uint('0x' + data.slice(offset, offset + 64)));
   return amount < 0n ? -amount : amount;
 }
 
@@ -78,57 +82,92 @@ async function firstInWindow(rpc, end, startTime) {
   return block(first);
 }
 
-async function poolVolume(rpc, first, last) {
+const pools = MARKETS.flatMap((asset) => asset.pools.map((pool) => ({ asset, ...pool })));
+const byAddress = new Map(pools.map((pool) => [pool.address, pool]));
+const addresses = [...byAddress.keys()];
+
+async function poolVolumes(rpc, first, last) {
   const segments = [];
   for (let from = first; from <= last; from += 100) segments.push([from, Math.min(from + 99, last)]);
-  const result = await chunked(segments, 3, (group) => rpc(group.map(([from, to]) =>
-    ['eth_getLogs', [{ address: POOL, topics: [SWAP_TOPIC], fromBlock: tag(from), toBlock: tag(to) }]])));
+  const results = await chunked(segments, 2, (group) => rpc(group.map(([from, to]) =>
+    ['eth_getLogs', [{ address: addresses, topics: [SWAP_TOPIC], fromBlock: tag(from), toBlock: tag(to) }]])));
   const seen = new Set();
-  let volume = 0n;
-  for (const [index, logs] of result.entries()) {
+  const volume = new Map(addresses.map((address) => [address, 0n]));
+  for (const [index, logs] of results.entries()) {
     const [from, to] = segments[index];
     assert(Array.isArray(logs), 'Invalid Swap response');
     for (const event of logs) {
       const number = Number(uint(event.blockNumber));
-      const identity = event.blockHash + ':' + event.logIndex;
-      assert(event.removed === false && event.address.toLowerCase() === POOL && event.topics[0] === SWAP_TOPIC
-        && number >= from && number <= to && !seen.has(identity), 'Unexpected or duplicate Swap');
+      const address = event.address.toLowerCase();
+      const pool = byAddress.get(address);
+      const identity = event.blockHash + ':' + uint(event.logIndex);
+      assert(event.removed === false && pool && event.topics[0] === SWAP_TOPIC
+        && /^0x[0-9a-f]{64}$/.test(event.blockHash) && number >= from && number <= to && !seen.has(identity),
+      'Unexpected or duplicate Swap');
       seen.add(identity);
-      volume += swapUSDC(event.data);
+      volume.set(address, volume.get(address) + swapUSDC(event.data, pool.asset.quoteSide));
     }
   }
-  return volume.toString();
+  return volume;
 }
 
-export async function observe(rpc, now = Date.now()) {
+const abiWord = (value) => value.toString(16).replace(/^0x/, '').padStart(64, '0');
+function factoryLookup(pool) {
+  return '0x1698ee82' + abiWord(pool.asset.token) + abiWord(USDC) + abiWord(pool.fee);
+}
+
+export async function observeMarkets(rpc, now = Date.now()) {
   const [chain, final] = await rpc([['eth_chainId', []], blockAt('finalized')]);
   assert(chain === '0x1', 'Expected Ethereum mainnet');
   const anchor = block(final);
   const age = Math.floor(now / 1000) - anchor.time;
   assert(age >= -120 && age <= 3600, 'Current finalized Ethereum data is outside the freshness window');
   const height = tag(anchor.block);
-  const [slot, supply, token0, token1] = await rpc([
-    callAt(POOL, fn.slot0, height), callAt(WETH, fn.supply, height),
-    callAt(POOL, fn.token0, height), callAt(POOL, fn.token1, height),
-  ]);
-  assert('0x' + token0.slice(-40).toLowerCase() === usdc && '0x' + token1.slice(-40).toLowerCase() === WETH,
-    'Unexpected pool token ordering');
-  const price = priceMicros(slot);
-  const supplyRaw = uint(supply);
-  const windowStart = await firstInWindow(rpc, anchor.block, anchor.time - 86400);
-  const volume = await poolVolume(rpc, windowStart.block, anchor.block);
+  const [quoteDecimals, ...decimals] = await rpc([callAt(USDC, fn.decimals, height),
+    ...MARKETS.map(({ token }) => callAt(token, fn.decimals, height))]);
+  assert(uint(quoteDecimals) === 6n && MARKETS.every((asset, i) => uint(decimals[i]) === BigInt(asset.decimals)),
+    'Unexpected token decimals');
+  const prices = new Map();
+  for (const pool of pools) {
+    const [registered, slot, token0, token1] = await rpc([
+      callAt(FACTORY, factoryLookup(pool), height), callAt(pool.address, fn.slot0, height),
+      callAt(pool.address, fn.token0, height), callAt(pool.address, fn.token1, height),
+    ]);
+    const address = (value) => '0x' + value.slice(-40).toLowerCase();
+    const tokens = [address(token0), address(token1)];
+    assert(address(registered) === pool.address && tokens[pool.asset.quoteSide] === USDC
+      && tokens[1 - pool.asset.quoteSide] === pool.asset.token, 'Unexpected Uniswap pool identity or token order');
+    prices.set(pool.address, priceMicros(slot, pool.asset));
+  }
 
-  // Height samples about a day apart. Each point carries its actual block time
-  // and hash, so no sample is presented as an exact UTC close.
+  const windowStart = await firstInWindow(rpc, anchor.block, anchor.time - 86400);
+  const volumes = await poolVolumes(rpc, windowStart.block, anchor.block);
+  // Observe the reference pool for each asset at the same set of heights.
   const heights = Array.from({ length: 29 }, (_, i) => tag(anchor.block - (29 - i) * 7150));
-  const history = await chunked(heights, 3, async (group) => {
-    const results = await rpc(group.flatMap((item) => [blockAt(item), callAt(POOL, fn.slot0, item)]));
-    return group.map((_, i) => ({ ...block(results[i * 2]), priceMicros: priceMicros(results[i * 2 + 1]) }));
+  const samples = await chunked(heights, 1, async ([item]) => {
+    const [meta, ...slots] = await rpc([blockAt(item), ...MARKETS.map((asset) =>
+      callAt(asset.pools[0].address, fn.slot0, item))]);
+    return [{ anchor: block(meta), slots }];
   });
-  history.push({ ...anchor, priceMicros: price });
-  return readSnapshot({
-    schema: SNAPSHOT, chain: 1, pool: POOL, token: WETH, license: 'CC0-1.0', anchor, windowStart,
-    priceMicros: price, supplyWei: supplyRaw.toString(), capMicros: (supplyRaw * BigInt(price) / 10n ** 18n).toString(),
-    volumeMicros: volume, history,
+  const supply = await rpc(MARKETS.map((asset) => callAt(asset.token, fn.supply, height)));
+  const markets = MARKETS.map((asset, index) => {
+    const historyPool = asset.pools[0].address;
+    const rows = asset.pools.map((pool) => ({ ...pool, priceMicros: prices.get(pool.address),
+      volumeMicros: volumes.get(pool.address).toString() }));
+    const history = samples.map(({ anchor: point, slots }) => ({ ...point, priceMicros: priceMicros(slots[index], asset) }));
+    history.push({ ...anchor, priceMicros: prices.get(historyPool) });
+    return { token: asset.token, supplyRaw: uint(supply[index]).toString(), ...aggregatePools(rows), pools: rows, historyPool, history };
   });
+  const [readback] = await rpc([blockAt(height)]);
+  assert(block(readback).hash === anchor.hash, 'Finalized Ethereum block changed during observation');
+  return readMarketsSnapshot({ schema: MARKETS_SNAPSHOT, chain: 1, quote: USDC, license: 'CC0-1.0', anchor, windowStart, markets });
+}
+
+export function legacySnapshot(data) {
+  const weth = data.markets[0];
+  const pool = weth.pools[0];
+  return readSnapshot({ schema: SNAPSHOT, chain: 1, pool: POOL, token: WETH, license: 'CC0-1.0',
+    anchor: data.anchor, windowStart: data.windowStart, priceMicros: pool.priceMicros, supplyWei: weth.supplyRaw,
+    capMicros: (BigInt(weth.supplyRaw) * BigInt(pool.priceMicros) / 10n ** 18n).toString(),
+    volumeMicros: pool.volumeMicros, history: weth.history });
 }
