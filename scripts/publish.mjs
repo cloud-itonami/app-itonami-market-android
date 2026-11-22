@@ -5,7 +5,7 @@ import { observeMarkets, legacySnapshot, rpcFor } from './ethereum.mjs';
 import { assert, INDEX, GATEWAY, boundedResponse, rawCID, readIndex, verifyBlock } from '../src/protocol.mjs';
 import { MARKETS_INDEX, readMarketsIndex, verifyMarketsBlock } from '../src/markets.mjs';
 
-const repo = 'network-awai/app-itonami-market-android';
+const repo = 'cloud-itonami/app-itonami-market-android';
 const output = resolve(process.env.MARKET_ARCHIVE_DIR ?? '.agent-output/feed-archive');
 const cli = process.env.MARKET_YATAVERSE_CLI;
 const invoke = (tool, args, input) => spawnSync(tool, args, {

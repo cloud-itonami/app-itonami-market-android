@@ -4,9 +4,11 @@
 // one kotoba.client.operation.v1 message on the port the host transfers; the canonical
 // broker on the host page checks it against the descriptor, asks the user and sends it.
 // scripts/build.mjs inlines protocol.mjs, markets.mjs and this file as one module script
-// (import lines and `export` keywords removed); the operation selectors arrive as JSON.
+// (with links.mjs; import lines and `export` keywords removed); the operation selectors arrive as
+// JSON, and an operation that is not declared (its recipient not confirmed) arrives as null.
 import { GATEWAY, parseJSON, boundedResponse, assert } from './protocol.mjs';
 import { MARKETS, MARKETS_POINTER, readMarketsIndex, verifyMarketsBlock } from './markets.mjs';
+import { addressURL, blockURL, linkAllowed } from './links.mjs';
 
 const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map((node) => [node.id, node]));
 const { latest, snapshot } = JSON.parse(ui.operations.textContent);
@@ -52,6 +54,11 @@ document.addEventListener('click', (event) => {
   const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
   if (!link) return;
   event.preventDefault();
+  if (!linkAllowed(link.href)) {
+    ui['link-note'].textContent = 'このリンクの行き先は宣言されていません。';
+    ui['link-note'].hidden = false;
+    return;
+  }
   const address = document.createElement('code');
   address.textContent = link.href;
   ui['link-note'].replaceChildren('この画面からは外部のページを開けません。アドレス: ', address);
@@ -62,8 +69,6 @@ const utc = new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: '
 const t = (sec) => utc.format(sec * 1000) + ' UTC';
 const scaled = (value, scale) => Number(value) / scale;
 const usdc = (value) => number.format(scaled(value, 1e6)) + ' USDC';
-const blockURL = (height) => 'https://etherscan.io/block/' + height;
-const addressURL = (address) => 'https://etherscan.io/address/' + address;
 const selectedMarket = () => current.markets[Number(ui.asset.value)];
 let current;
 
@@ -212,14 +217,20 @@ ui.load.addEventListener('click', async () => {
       assert(current.anchor.block !== index.anchor.block || current.anchor.hash === index.anchor.hash,
         '表示中の確定ブロックと異なるハッシュが返されました。');
     }
+    if (!snapshot) {
+      ui.status.textContent = `最新の CID は ${index.cid}（観測ブロック ${index.anchor.block}）です。`
+        + 'スナップショットの送り先（yataverse.com の運営者）が確定していないため、読み取りは無効です。';
+      return;
+    }
     const bytes = await get(snapshot, `${GATEWAY}/ipfs/${index.cid}?format=raw`);
     const data = await verifyMarketsBlock(bytes, index);
     render(data, index);
     ui.status.textContent = Date.now() / 1000 - data.anchor.time > 9 * 3600
       ? 'CID は一致しました。観測から9時間以上経過しています。' : '最新の公開スナップショットを表示しています。';
   } catch (error) {
-    const message = error.message === 'client operation was not approved'
-      ? '取得を取り消しました。' : '取得に失敗しました。 ' + error.message;
+    const message = error.message === 'client operation was not approved' ? '取得を取り消しました。'
+      : error.message === 'client operation is not eligible and supported' ? 'この送信は 設定 › 許可した送信 で取り消されています。'
+        : '取得に失敗しました。 ' + error.message;
     ui.status.textContent = current ? message + ' 前回の検証済みデータを表示しています。' : message;
   } finally {
     ui.load.disabled = false;
@@ -227,6 +238,8 @@ ui.load.addEventListener('click', async () => {
 });
 new ResizeObserver(draw).observe(ui.chart);
 hostPort.then(() => {
-  ui.load.disabled = false;
-  ui.status.textContent = '最新 CID の取得と Yataverse の読み取りを順に確認します。';
+  ui.load.disabled = !latest;
+  ui.status.textContent = !latest ? '外部への送信が宣言されていないため、取得できません。'
+    : snapshot ? '最新 CID の取得と Yataverse の読み取りを順に確認します。'
+      : '最新 CID を GitHub から取得します。スナップショットの読み取りは、送り先が確定するまで無効です。';
 });
