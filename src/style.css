@@ -31,3 +31,5 @@ a { color: #075d71; }
 thead { z-index: 2; }
 .history-head { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: space-between; align-items: baseline; }
 .history-head select { font: inherit; min-height: 2.5rem; padding-inline: .35rem; }
+.link-note { overflow-wrap: anywhere; }
+.link-note code { font: .85rem/1.6 ui-monospace, monospace; user-select: all; }

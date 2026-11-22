@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="@CSP@">
+<title>営 市場情報</title>
+<link rel="stylesheet" href="./host.css">
+<link rel="stylesheet" href="./kotoba-client-consent.css">
+<script type="module" src="./host.mjs"></script>
+</head>
+<body>
+<div id="app"></div>
+<details id="allowed-sending" class="settings">
+  <summary>設定 › 許可した送信</summary>
+  <p id="withdrawal-text"></p>
+  <ul id="allowed-list"></ul>
+  <p class="note">取り消すと、画面を読み込み直します（表示中のデータは消えます）。送り先の国の情報: <a id="foreign-info" target="_blank" rel="noopener noreferrer">外国にある送り先</a></p>
+</details>
+<noscript><p class="problem">この app は JavaScript を使います。</p></noscript>
+</body>
+</html>

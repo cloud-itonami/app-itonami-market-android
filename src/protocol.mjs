@@ -4,7 +4,7 @@ export const SWAP_TOPIC = '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed80
 export const SNAPSHOT = 'itonami.onchain-market.v1';
 export const INDEX = 'itonami.market-index.v1';
 export const RAW_CID = /^bafkrei[a-h][a-z2-7]{50}[aeimquy4]$/;
-export const POINTER = 'https://raw.githubusercontent.com/network-awai/app-itonami-market-android/refs/heads/feed/latest.json';
+export const POINTER = 'https://raw.githubusercontent.com/cloud-itonami/app-itonami-market-android/refs/heads/feed/latest.json';
 export const GATEWAY = 'https://yataverse.com';
 export const MAX_BYTES = 128 * 1024;
 

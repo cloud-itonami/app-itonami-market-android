@@ -92,7 +92,7 @@ test('v2 validates its fixed markets and common window and keeps the v1 pool val
 });
 
 test('history and supply comparison expose their source containers', async () => {
-  const html = await readFile(new URL('../src/index.html', import.meta.url), 'utf8');
+  const html = await readFile(new URL('../src/guest.html', import.meta.url), 'utf8');
   assert.match(html, /<a id="history-pool"[^>]*>/);
   assert.match(html, /<tbody id="supply-rows">/);
   assert.match(html, /<div id="supply-reasons"[^>]*>/);

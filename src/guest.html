@@ -1,20 +1,11 @@
-<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; @CONNECT_SRC@">
-<title>営 市場情報</title>
-<link rel="stylesheet" href="./style.css">
-<link rel="stylesheet" href="./kotoba-client-consent.css">
-<script type="module" src="./app.mjs"></script>
-</head>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>営 市場情報</title><style>{{STYLE}}</style></head>
 <body>
 <header><div class="shell"><strong>営</strong> 市場情報</div></header>
 <main class="shell">
   <section class="hero"><div><h1>オンチェーン市場</h1><p>Ethereum・Uniswap v3 の WETH と WBTC を USDC 建てで比較</p></div>
     <button type="button" id="load" disabled>最新スナップショットを取得</button></section>
   <p class="status" id="status" role="status">アプリを読み込んでいます。</p>
+  <p class="link-note" id="link-note" hidden></p>
   <section id="snapshot" hidden>
     <div class="panel">
       <h2 id="market-title">市場比較</h2>
@@ -70,5 +61,6 @@
     </div>
   </section>
 </main>
-</body>
-</html>
+<script type="application/json" id="operations">{{OPERATIONS}}</script>
+<script type="module">{{SCRIPT}}</script>
+</body></html>
