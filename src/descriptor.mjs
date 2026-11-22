@@ -14,7 +14,7 @@ export const snapshot = get('market/block', 'yataverse', 'read-market-block', GA
   ['public-snapshot-cid', 'network-address']);
 
 export const descriptor = {
-  schema: 'kotoba.app.client-runtime.v1', target: 'browser', profile: 'trusted-page-v1',
+  schema: 'kotoba.app.client-runtime.v1', target: 'browser', profile: 'restricted-wasm-v1',
   entry: 'index.html', 'local-state': { adapter: 'memory', schema: 'itonami.onchain-market.v2', version: 1 },
   workers: [], operations: [latest, snapshot],
 };

@@ -1,15 +1,61 @@
-import { createClientConsentHost, createClientOperationBroker } from './kotoba-client-runtime.js';
-import { capabilities, descriptor, latest, snapshot } from './descriptor.mjs';
+// restricted-wasm-v1 guest (KOTOBA-159). The host page mounts this document with
+// mountRestrictedClientApp in an opaque-origin sandbox (iframe sandbox="allow-scripts",
+// connect-src 'none'): it reaches no network, no parent DOM and no storage. Each fetch is
+// one kotoba.client.operation.v1 message on the port the host transfers; the canonical
+// broker on the host page checks it against the descriptor, asks the user and sends it.
+// scripts/build.mjs inlines protocol.mjs, markets.mjs and this file as one module script
+// (import lines and `export` keywords removed); the operation selectors arrive as JSON.
 import { GATEWAY, parseJSON, boundedResponse, assert } from './protocol.mjs';
 import { MARKETS, MARKETS_POINTER, readMarketsIndex, verifyMarketsBlock } from './markets.mjs';
 
 const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map((node) => [node.id, node]));
-const broker = createClientOperationBroker({
-  runtime: descriptor,
-  requestedCapabilities: capabilities,
-  hostSupportedOperations: descriptor.operations.map(({ capability, service, operation }) => [capability, service, operation]),
-  approvedOperations: descriptor.operations,
-  consentHost: createClientConsentHost(),
+const { latest, snapshot } = JSON.parse(ui.operations.textContent);
+const OPERATION_TIMEOUT_MS = 120_000;
+const hostPort = new Promise((resolve) => {
+  addEventListener('message', function accept(event) {
+    const port = event.ports?.[0];
+    if (event.source !== parent || event.data?.protocol !== 'kotoba.client.host.v1' || !port) return;
+    removeEventListener('message', accept);
+    resolve(port);
+  });
+});
+const waiting = new Map();
+let nextId = 0;
+hostPort.then((port) => {
+  port.onmessage = ({ data }) => {
+    const done = waiting.get(data?.id);
+    if (!done) return;
+    waiting.delete(data.id);
+    done(data);
+  };
+});
+
+// One operation through the host's broker. The bridge returns a text body (bounded by the
+// runtime to 1 MiB) and its status; it becomes a Response so the byte bounds below still apply.
+async function invoke(selector, input) {
+  const port = await hostPort;
+  const id = 'op-' + (++nextId);
+  const reply = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { waiting.delete(id); reject(new Error('応答がありませんでした。')); }, OPERATION_TIMEOUT_MS);
+    waiting.set(id, (data) => { clearTimeout(timer); resolve(data); });
+  });
+  port.postMessage({ protocol: 'kotoba.client.operation.v1', id, selector, payload: { input } });
+  const data = await reply;
+  if (data.ok !== true) throw new Error(typeof data.error === 'string' ? data.error : 'client operation failed');
+  if (typeof data.content !== 'string') throw new Error('応答の形式が正しくありません。');
+  return new Response(data.content, { status: data.status });
+}
+
+// The sandbox cannot open another page: a link would replace this document, and the host then
+// closes the app. Links stay as references; a click shows the address to copy instead.
+document.addEventListener('click', (event) => {
+  const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+  if (!link) return;
+  event.preventDefault();
+  const address = document.createElement('code');
+  address.textContent = link.href;
+  ui['link-note'].replaceChildren('この画面からは外部のページを開けません。アドレス: ', address);
+  ui['link-note'].hidden = false;
 });
 const number = new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 2 });
 const utc = new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
@@ -22,8 +68,7 @@ const selectedMarket = () => current.markets[Number(ui.asset.value)];
 let current;
 
 async function get(operation, input, maxBytes) {
-  const response = await broker.invoke(operation, { input }, { signal: AbortSignal.timeout(120_000) });
-  return boundedResponse(response, maxBytes);
+  return boundedResponse(await invoke(operation, input), maxBytes);
 }
 function draw() {
   if (!current) return;
@@ -181,5 +226,7 @@ ui.load.addEventListener('click', async () => {
   }
 });
 new ResizeObserver(draw).observe(ui.chart);
-ui.load.disabled = false;
-ui.status.textContent = '最新 CID の取得と Yataverse の読み取りを順に確認します。';
+hostPort.then(() => {
+  ui.load.disabled = false;
+  ui.status.textContent = '最新 CID の取得と Yataverse の読み取りを順に確認します。';
+});
