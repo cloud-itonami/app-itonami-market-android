@@ -1,0 +1,12 @@
+{
+  "schema": "itonami.disabled-features.v1",
+  "note": "Features that worked before the restricted-wasm-v1 move and are off now. Decision 2026-11-22 (exception for this app): it is not deployed while this list is not empty (scripts/deploy-gate.mjs). Remove an entry only when the feature works again.",
+  "features": [
+    {
+      "id": "snapshot-read",
+      "label": "最新スナップショットを Yataverse から読み、表とグラフを出す",
+      "reason": "The yataverse.com operator is not confirmed, so the Yataverse read is not declared; the app shows only the latest CID.",
+      "waits-for": "Itonami item 68 (yataverse operator)"
+    }
+  ]
+}

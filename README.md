@@ -2,6 +2,11 @@
 
 [公開 Web](https://network-awai.github.io/app-itonami-market-android/) と Tauri v3 Android が同じ静的 UI を使う。発行されている最新 CID と観測ブロックを GitHub の公開 feed から取得し、Yataverse から取得した Awai FS 互換の raw ブロックをブラウザ内で SHA-256 検証する。2つの取得は正本 Kotoba broker による個別同意を必要とする。配布元は静的アセットのみを提供する。
 
+## 今は使えない機能（2026-11-22、restricted-wasm-v1 への移行による）
+
+- **最新スナップショットを Yataverse から読み、表とグラフを出すこと**: 使えない。yataverse.com を運営する事業者が確定しておらず、外部への送信として宣言していないため（KOTOBA-159、Itonami の item 68）。今の app は、GitHub の公開 feed から最新の CID と観測ブロックを取って見せるところまで。
+- 同じことを `disabled-features.json` に機械で読める形で書いてある。**これが空でないあいだ、CI は Pages にデプロイしない**（`scripts/deploy-gate.mjs`。開示のページが 200 を返すことも同じ gate で確かめる。Decision 2026-11-22）。送り先が確定して読み取りが戻ったら、その行を消し、ここも書き直す。
+
 ## データ
 
 Ethereum mainnet の [Uniswap v3 factory](https://docs.uniswap.org/contracts/v3/reference/deployments/ethereum-deployments) が返す WETH/USDC と WBTC/USDC を対象とする。銘柄ごとに手数料 0.05% と 0.30% の2プールを集計する。発行時に factory のアドレス、プールのトークン順、各トークンの小数桁を確定ブロックで照合する。
