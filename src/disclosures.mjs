@@ -15,7 +15,8 @@ export const WITHDRAWAL_PLACE = '設定 › 許可した送信';
 // https://disclosures.awai.network/<app id>/foreign-info.html#<country section>. Its content for this
 // app is a PR to that repository. The declaration must not reach production before that page answers
 // 200 (scripts/check-disclosure-pages.mjs).
-export const APP_ID = 'itonami-market-android';
+// The folder is the app's package id (the Tauri identifier), Decision 2026-11-22.
+export const APP_ID = 'network.awai.itonami.market';
 export const DISCLOSURES_BASE = 'https://disclosures.awai.network/';
 export const FOREIGN_INFO_URL = `${DISCLOSURES_BASE}${APP_ID}/foreign-info.html`;
 

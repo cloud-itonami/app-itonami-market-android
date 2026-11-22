@@ -43,7 +43,7 @@ test('the descriptor is restricted-wasm-v1 and declares only operations with a c
   const op = d.operations[0];
   assert.equal(op.endpoint.routes[0].path, '/cloud-itonami/app-itonami-market-android/refs/heads/feed/latest-v2.json');
   assert.equal(op.disclosure.recipient, 'GitHub, Inc.');
-  assert.equal(op.disclosure['foreign-info-url'], 'https://disclosures.awai.network/itonami-market-android/foreign-info.html#us');
+  assert.equal(op.disclosure['foreign-info-url'], 'https://disclosures.awai.network/network.awai.itonami.market/foreign-info.html#us');
   assert.equal(op.disclosure.withdrawal, '設定 › 許可した送信');
   assert.deepEqual(runtime.clientDisclosureProblems(op.disclosure), []);
 });
@@ -151,6 +151,8 @@ test('設定 › 許可した送信: a withdrawn service is not eligible; restor
   assert.equal(createAllowedSending({ load() { throw new Error('blocked'); }, save() { throw new Error('blocked'); } }).isWithdrawn('github-raw'), false);
 });
 
-test('the foreign-information page is the shared disclosures location', () => {
-  assert.equal(FOREIGN_INFO_URL, 'https://disclosures.awai.network/itonami-market-android/foreign-info.html');
+test('the foreign-information page is the shared disclosures location, under the package id', async () => {
+  const conf = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'));
+  assert.equal(FOREIGN_INFO_URL, `https://disclosures.awai.network/${conf.identifier}/foreign-info.html`);
+  assert.equal(FOREIGN_INFO_URL, 'https://disclosures.awai.network/network.awai.itonami.market/foreign-info.html');
 });
