@@ -30,9 +30,9 @@ jobs:
           node-version: '22'
       - run: node scripts/build.mjs
       - run: node --test
-      - name: Disclosure pages answer 200 before deployment
+      - name: Deploy gate (disclosure pages answer 200, no feature from before the move is off)
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        run: node scripts/check-disclosure-pages.mjs
+        run: node scripts/deploy-gate.mjs
       - if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
